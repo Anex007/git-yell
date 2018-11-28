@@ -1,0 +1,42 @@
+#!/bin/bash
+
+USAGE="git-yell [PASSPHRASE] ( push [message] [multiple files|directories] | pull ) "
+
+BLOB_FILE="git-yell.blob"
+
+# first argument is the key
+# second argument is the commit message
+# The rest are the files to add
+function push_() {
+    tar zcf - "${@:3:$#}" | openssl aes-256-cbc -pbkdf2 -e -k $1 -out $BLOB_FILE
+    echo "Wrote to a blob file"
+    git add $BLOB_FILE
+    echo -n "Commit and push with message: $2? [y/n] "
+    read reply
+    if [[ $reply == "y" ]]; then
+        git commit -m $2
+        git push
+    else
+        echo "added the files but didn't commit yet"
+    fi
+}
+
+# first argument is the key
+function pull_() {
+    git pull
+    openssl aes-256-cbc -pbkdf2 -d -k $1 -in $BLOB_FILE | tar zx
+}
+
+if [[ -n $1 && -n $2 ]]; then
+    # We got the key
+    if [[ $2 == "push" && -n $3 && -n $4 ]]; then
+        push_ $1 $3 ${@:4:$#}
+    elif [[ $2 == "pull" ]]; then
+        pull_ $1
+    else
+        echo "push syntax -> git-yell [PASSPHRASE] push [COMMIT MESSAGE] list.c include/"
+        echo "pull syntax -> git-yell [PASSPHRASE] pull"
+    fi
+else
+    echo -e "password and push or pull is not supplied $USAGE"
+fi
